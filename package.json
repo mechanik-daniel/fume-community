@@ -62,7 +62,7 @@
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
-    "fhir-package-explorer": "^1.9.2",
+    "fhir-package-explorer": "^1.9.3",
     "fhir-package-installer": "^1.12.0",
     "fhir-snapshot-generator": "^2.3.0",
     "fhir-terminology-runtime": "^1.3.0",
