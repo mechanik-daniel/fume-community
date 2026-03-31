@@ -6,11 +6,11 @@
 import type { FumeHttpEvaluationError } from '@outburn/types';
 import { randomUUID } from 'crypto';
 import express, { type NextFunction, type Request, type Response } from 'express';
-import swaggerUi from 'swagger-ui-express';
 
 import { version as engineVersion } from '../package.json';
 import type { FumeEngine } from './engine';
 import { openApiSpec } from './openapi.generated';
+import { createSwaggerUiRouter } from './swaggerUiRouter';
 import type { DiagnosticEntry, EvaluateVerboseReport } from './types';
 import type { OpenApiSpec, OpenApiSpecFactory } from './types/FumeServerCreateOptions';
 import { getFhirServerEndpoint, hasMappingSources } from './utils/mappingSources';
@@ -590,16 +590,11 @@ export const createHttpRouter = (options?: CreateHttpRouterOptions) => {
 
   // OpenAPI spec
   const effectiveOpenApiSpec = resolveOpenApiSpec(options);
-  const openApiOptions = {
-    swaggerOptions: {
-      url: '/api-docs/swagger.json'
-    },
-  };
   router.get('/api-docs/swagger.json', (_req, res) => res.json(effectiveOpenApiSpec));
-  router.use(
-    '/api-docs',
-    swaggerUi.serveFiles(undefined, openApiOptions), swaggerUi.setup(null, openApiOptions)
-  );
+  router.use('/api-docs', createSwaggerUiRouter({
+    swaggerJsonUrl: '/api-docs/swagger.json',
+    title: typeof effectiveOpenApiSpec.info?.title === 'string' ? effectiveOpenApiSpec.info.title : undefined
+  }));
 
   // /Mapping/*
   const mapping = express.Router();
