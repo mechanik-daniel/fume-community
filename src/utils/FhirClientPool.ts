@@ -5,15 +5,8 @@
 
 import { FhirClient } from '@outburn/fhir-client';
 import type { FhirVersion } from '@outburn/types';
+import type { FhirConnectionConfig } from 'fumifier';
 import { LRUCache } from 'lru-cache';
-
-interface FhirConnectionConfig {
-  authType?: 'NONE' | 'BASIC';
-  username?: string;
-  password?: string;
-  fhirVersion?: FhirVersion;
-  timeout?: number;
-}
 
 interface EffectiveFhirConnectionConfig {
   authType: 'NONE' | 'BASIC';

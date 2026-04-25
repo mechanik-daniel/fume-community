@@ -11,7 +11,7 @@ import type { Logger } from '@outburn/types';
 import { FhirPackageExplorer } from 'fhir-package-explorer';
 import { FhirSnapshotGenerator } from 'fhir-snapshot-generator';
 import { FhirTerminologyRuntime } from 'fhir-terminology-runtime';
-import fumifier, { type FumifierCompiled, FumifierError, type FumifierOptions, type MappingCacheInterface } from 'fumifier';
+import fumifier, { type FhirConnectionConfig, type FumifierCompiled, FumifierError, type FumifierOptions, type MappingCacheInterface } from 'fumifier';
 import { LRUCache } from 'lru-cache';
 
 import { version as engineVersion } from '../package.json';
@@ -40,14 +40,6 @@ interface GlobalFhirContext {
   registryUrl?: string;
   registryToken?: string;
   isInitialized: boolean;
-}
-
-interface FhirConnectionConfig {
-  authType?: 'NONE' | 'BASIC';
-  username?: string;
-  password?: string;
-  fhirVersion?: FhirVersion;
-  timeout?: number;
 }
 
 type ConnectionResolver = (target: string | null, config?: FhirConnectionConfig) => FhirClient;
@@ -569,7 +561,7 @@ export class FumeEngine<ConfigType extends IConfig = IConfig> {
       ...(this.astCache ? { astCache: this.astCache } : {})
     };
 
-    (options as FumifierOptions & { connectionResolver: ConnectionResolver }).connectionResolver = this.createConnectionResolver();
+    options.connectionResolver = this.createConnectionResolver();
     return options;
   }
 
