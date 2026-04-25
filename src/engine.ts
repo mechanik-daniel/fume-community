@@ -17,6 +17,7 @@ import { LRUCache } from 'lru-cache';
 import { version as engineVersion } from '../package.json';
 import { defaultConfig, parseFumeConfig } from './serverConfig';
 import type {
+  ConnectionConfig,
   DiagnosticEntry,
   EvaluateVerboseReport,
   FhirPackageIdentifier,
@@ -24,6 +25,8 @@ import type {
   FumeEngineCreateOptions,
   IAppBinding,
   IConfig} from './types';
+import { ConnectionsLoader } from './utils/connectionsLoader';
+import { FhirClientPool } from './utils/FhirClientPool';
 import { createNullLogger, withPrefix } from './utils/logging';
 
 interface GlobalFhirContext {
@@ -38,6 +41,28 @@ interface GlobalFhirContext {
   registryToken?: string;
   isInitialized: boolean;
 }
+
+interface FhirConnectionConfig {
+  authType?: 'NONE' | 'BASIC';
+  username?: string;
+  password?: string;
+  fhirVersion?: FhirVersion;
+  timeout?: number;
+}
+
+type ConnectionResolver = (target: string | null, config?: FhirConnectionConfig) => FhirClient;
+
+const hasInlineUrlConfig = (config?: FhirConnectionConfig): boolean => {
+  if (!config) {
+    return false;
+  }
+
+  return typeof config.authType !== 'undefined'
+    || typeof config.username !== 'undefined'
+    || typeof config.password !== 'undefined'
+    || typeof config.fhirVersion !== 'undefined'
+    || typeof config.timeout !== 'undefined';
+};
 
 const defaultGlobalFhirContext = (): GlobalFhirContext => ({
   navigator: null,
@@ -55,6 +80,8 @@ export class FumeEngine<ConfigType extends IConfig = IConfig> {
   private readonly logger: Logger;
 
   private fhirClient?: FhirClient;
+  private namedClients = new Map<string, FhirClient>();
+  private urlClientPool?: FhirClientPool;
   private mappingProvider?: FumeMappingProvider;
 
   private globalFhirContext: GlobalFhirContext = defaultGlobalFhirContext();
@@ -243,6 +270,19 @@ export class FumeEngine<ConfigType extends IConfig = IConfig> {
       this.fhirClient = this.createFhirClient();
     }
 
+    const namedConnections = ConnectionsLoader.load(this.config as IConfig);
+    this.namedClients = new Map<string, FhirClient>();
+    for (const connection of namedConnections) {
+      this.namedClients.set(connection.name, this.createNamedFhirClient(connection));
+    }
+    this.urlClientPool = new FhirClientPool(
+      this.config.FHIR_CONNECTIONS_URL_POOL_SIZE ?? 10,
+      this.getFhirVersion(),
+      this.config.FHIR_SERVER_TIMEOUT
+    );
+    log.debug?.('Initialized URL-based FHIR client pool.', { initialized: this.urlClientPool !== undefined });
+    log.info(`Loaded ${this.namedClients.size} named FHIR connection(s).`);
+
     await this.initializeGlobalFhirContext();
     log.info('Global FHIR context initialized');
 
@@ -260,6 +300,7 @@ export class FumeEngine<ConfigType extends IConfig = IConfig> {
       : undefined;
     const mappingProviderConfig: ConstructorParameters<typeof FumeMappingProvider>[0] = {
       logger: this.getChildLogger('[mapping-provider]'),
+      // Intentionally uses default FHIR client - must not be connection-aware.
       ...(this.fhirClient ? { fhirClient: this.fhirClient as ConstructorParameters<typeof FumeMappingProvider>[0]['fhirClient'] } : {}),
       ...(mappingsFolder ? { mappingsFolder } : {}),
       ...(normalizedFileExtension ? { fileExtension: normalizedFileExtension } : {}),
@@ -361,6 +402,19 @@ export class FumeEngine<ConfigType extends IConfig = IConfig> {
     return client;
   }
 
+  private createNamedFhirClient (connection: ConnectionConfig): FhirClient {
+    const auth = connection.authType === 'BASIC' && connection.username && connection.password
+      ? { username: connection.username, password: connection.password }
+      : undefined;
+
+    return new FhirClient({
+      baseUrl: connection.baseUrl,
+      fhirVersion: (connection.fhirVersion ?? this.getFhirVersion()) as FhirVersion,
+      timeout: typeof connection.timeout === 'number' ? connection.timeout : this.config.FHIR_SERVER_TIMEOUT,
+      auth
+    });
+  }
+
   private async initializeGlobalFhirContext () {
     const {
       FHIR_VERSION,
@@ -419,6 +473,7 @@ export class FumeEngine<ConfigType extends IConfig = IConfig> {
       fhirVersion: FHIR_VERSION as FhirVersion,
       cacheMode,
       logger: this.getChildLogger('[terminology-runtime]'),
+      // Intentionally uses default FHIR client - must not be connection-aware.
       fhirClient: this.fhirClient,
       ...(typeof MAPPINGS_SERVER_POLLING_INTERVAL_MS === 'number'
         ? { serverConceptMapPollingIntervalMs: MAPPINGS_SERVER_POLLING_INTERVAL_MS }
@@ -465,6 +520,35 @@ export class FumeEngine<ConfigType extends IConfig = IConfig> {
     };
   }
 
+  private createConnectionResolver (): ConnectionResolver {
+    return (target, config) => {
+      if (!target) {
+        if (!this.fhirClient) {
+          throw new Error('Default FHIR client is not initialized.');
+        }
+        return this.fhirClient;
+      }
+
+      if (/^https?:\/\//i.test(target)) {
+        if (!this.urlClientPool) {
+          throw new Error('FHIR URL client pool is not initialized.');
+        }
+        return this.urlClientPool.get(target, config);
+      }
+
+      if (hasInlineUrlConfig(config)) {
+        throw new Error(`Inline FHIR connection config is only supported for URL targets. Configure named connection "${target}" in connections.yml.`);
+      }
+
+      const namedClient = this.namedClients.get(target);
+      if (!namedClient) {
+        throw new Error(`Unknown FHIR connection name: "${target}"`);
+      }
+
+      return namedClient;
+    };
+  }
+
   private async getFumifierOptions (): Promise<FumifierOptions> {
     const globalContext = this.globalFhirContext;
 
@@ -476,13 +560,17 @@ export class FumeEngine<ConfigType extends IConfig = IConfig> {
       throw new Error('Global terminology runtime is not initialized. This should be done during warmup.');
     }
 
-    return {
+    const options: FumifierOptions = {
       mappingCache: this.createMappingCache(),
       navigator: globalContext.navigator,
       terminologyRuntime: globalContext.terminologyRuntime,
+      // Intentionally uses default FHIR client - must not be connection-aware.
       fhirClient: this.fhirClient,
       ...(this.astCache ? { astCache: this.astCache } : {})
     };
+
+    (options as FumifierOptions & { connectionResolver: ConnectionResolver }).connectionResolver = this.createConnectionResolver();
+    return options;
   }
 
   private async compileExpression (expression: string): Promise<FumifierCompiled> {

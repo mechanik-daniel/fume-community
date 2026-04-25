@@ -9,6 +9,9 @@ export { FumeEngine } from './engine';
  * Export types
  */
 export type {
+  ConnectionAuthType,
+  ConnectionConfig,
+  ConnectionsFile,
   DiagnosticEntry,
   DiagnosticLevel,
   EvaluateVerboseReport,

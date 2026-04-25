@@ -38,6 +38,14 @@ const normalizeOptionalCacheDir = (value: unknown): unknown => {
 	return trimmed;
 };
 
+const normalizeOptionalConnectionsFile = (value: unknown): unknown => {
+	if (typeof value !== 'string') return value;
+	const trimmed = value.trim();
+	if (trimmed === '') return undefined;
+	if (trimmed.toLowerCase() === 'n/a') return undefined;
+	return trimmed;
+};
+
 export const FumeConfigSchema = z.object({
 	SERVER_PORT: z.preprocess((a) => typeof a === 'string' ? parseInt(a) : a, z.number().int('Must be an integer').nonnegative('Must be non-negative').default(42420)),
 	FUME_REQUEST_BODY_LIMIT: z.string().min(1).default('400mb'),
@@ -64,6 +72,11 @@ export const FumeConfigSchema = z.object({
 	FHIR_SERVER_AUTH_TYPE: z.string().default('NONE'),
 	FHIR_SERVER_UN: z.string().default(''),
 	FHIR_SERVER_PW: z.string().default(''),
+	FHIR_CONNECTIONS_FILE: z.preprocess(normalizeOptionalConnectionsFile, z.string().min(1).optional()),
+	FHIR_CONNECTIONS_URL_POOL_SIZE: z.preprocess(
+		(a) => typeof a === 'string' ? parseInt(a) : a,
+		z.number().int('Must be an integer').positive('Must be positive').default(10)
+	),
 	FHIR_SERVER_TIMEOUT: z.preprocess((a) => typeof a === 'string' ? parseInt(a) : a, z.number().int('Must be an integer').positive('Must be positive').default(30000)),
 	FHIR_VERSION: z.string().min(1).default('4.0.1'),
 	FHIR_PACKAGES: z.string().default(''),
