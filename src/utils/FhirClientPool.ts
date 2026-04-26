@@ -5,6 +5,7 @@
 
 import { FhirClient } from '@outburn/fhir-client';
 import type { FhirVersion } from '@outburn/types';
+import { createHash } from 'crypto';
 import type { FhirConnectionConfig } from 'fumifier';
 import { LRUCache } from 'lru-cache';
 
@@ -17,7 +18,10 @@ interface EffectiveFhirConnectionConfig {
 }
 
 const getPoolCacheKey = (url: string, config: EffectiveFhirConnectionConfig): string => {
-  return `${url}||${config.authType}||${config.username ?? ''}||${config.password ?? ''}||${config.fhirVersion}||${config.timeout}`;
+  // Hash credentials to avoid storing plaintext secrets in cache key
+  const credentialTuple = `${config.username ?? ''}:${config.password ?? ''}`;
+  const credentialHash = createHash('sha256').update(credentialTuple).digest('hex');
+  return `${url}||${config.authType}||${credentialHash}||${config.fhirVersion}||${config.timeout}`;
 };
 
 const normalizeConnectionConfig = (
