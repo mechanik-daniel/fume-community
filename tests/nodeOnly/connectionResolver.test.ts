@@ -31,6 +31,19 @@ interface ResolverContext {
   urlClientPool?: UrlPoolLike;
 }
 
+interface FumifierOptionsContext {
+  globalFhirContext: {
+    navigator: unknown;
+    terminologyRuntime: unknown;
+    isInitialized: boolean;
+  };
+  createMappingCache: () => unknown;
+  createConnectionResolver: () => Resolver;
+  fhirClient?: FhirClientLike;
+  namedConnectionNames: string[];
+  astCache?: unknown;
+}
+
 describe('FumeEngine.createConnectionResolver', () => {
   test('returns default client when target is null', () => {
     const defaultClient = { id: 'default-client' };
@@ -125,5 +138,42 @@ describe('FumeEngine.createConnectionResolver', () => {
 
     const resolver = createConnectionResolver.call(context);
     expect(() => resolver('unknown')).toThrow('Unknown FHIR connection name: "unknown"');
+  });
+});
+
+describe('FumeEngine.getFumifierOptions', () => {
+  test('passes named connection names to fumifier in configured order', async () => {
+    const defaultClient = { id: 'default-client' };
+    const mappingCache = { getKeys: async () => [], get: async () => '' };
+    const resolver: Resolver = () => defaultClient;
+    const context: FumifierOptionsContext = {
+      globalFhirContext: {
+        navigator: { id: 'navigator' },
+        terminologyRuntime: { id: 'terminology-runtime' },
+        isInitialized: true,
+      },
+      createMappingCache: () => mappingCache,
+      createConnectionResolver: () => resolver,
+      fhirClient: defaultClient,
+      namedConnectionNames: ['serverA', 'serverB'],
+    };
+
+    const getFumifierOptions = Reflect.get(FumeEngine.prototype, 'getFumifierOptions') as
+      ((this: FumifierOptionsContext) => Promise<{
+        mappingCache: unknown;
+        navigator: unknown;
+        terminologyRuntime: unknown;
+        fhirClient?: FhirClientLike;
+        connectionResolver?: Resolver;
+        namedFhirConnectionNames?: string[];
+      }>);
+
+    const options = await getFumifierOptions.call(context);
+
+    expect(options.mappingCache).toBe(mappingCache);
+    expect(options.fhirClient).toBe(defaultClient);
+    expect(options.connectionResolver).toBe(resolver);
+    expect(options.namedFhirConnectionNames).toStrictEqual(['serverA', 'serverB']);
+    expect(options.namedFhirConnectionNames).not.toBe(context.namedConnectionNames);
   });
 });

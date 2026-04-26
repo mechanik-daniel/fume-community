@@ -72,6 +72,7 @@ export class FumeEngine<ConfigType extends IConfig = IConfig> {
   private readonly logger: Logger;
 
   private fhirClient?: FhirClient;
+  private namedConnectionNames: string[] = [];
   private namedClients = new Map<string, FhirClient>();
   private urlClientPool?: FhirClientPool;
   private mappingProvider?: FumeMappingProvider;
@@ -264,6 +265,7 @@ export class FumeEngine<ConfigType extends IConfig = IConfig> {
 
     const loadedConnections = ConnectionsLoader.loadWithMetadata(this.config as IConfig);
     const namedConnections = loadedConnections.connections;
+    this.namedConnectionNames = namedConnections.map((connection) => connection.name);
     this.namedClients = new Map<string, FhirClient>();
     for (const connection of namedConnections) {
       this.namedClients.set(connection.name, this.createNamedFhirClient(connection));
@@ -561,12 +563,13 @@ export class FumeEngine<ConfigType extends IConfig = IConfig> {
       throw new Error('Global terminology runtime is not initialized. This should be done during warmup.');
     }
 
-    const options: FumifierOptions = {
+    const options: FumifierOptions & { namedFhirConnectionNames?: string[] } = {
       mappingCache: this.createMappingCache(),
       navigator: globalContext.navigator,
       terminologyRuntime: globalContext.terminologyRuntime,
       // Intentionally uses default FHIR client - must not be connection-aware.
       fhirClient: this.fhirClient,
+      namedFhirConnectionNames: [...this.namedConnectionNames],
       ...(this.astCache ? { astCache: this.astCache } : {})
     };
 
