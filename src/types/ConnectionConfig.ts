@@ -16,5 +16,5 @@ export interface ConnectionConfig {
 }
 
 export interface ConnectionsFile {
-  connections: ConnectionConfig[]
+  fhir: ConnectionConfig[]
 }

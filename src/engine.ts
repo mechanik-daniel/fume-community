@@ -262,7 +262,8 @@ export class FumeEngine<ConfigType extends IConfig = IConfig> {
       this.fhirClient = this.createFhirClient();
     }
 
-    const namedConnections = ConnectionsLoader.load(this.config as IConfig);
+    const loadedConnections = ConnectionsLoader.loadWithMetadata(this.config as IConfig);
+    const namedConnections = loadedConnections.connections;
     this.namedClients = new Map<string, FhirClient>();
     for (const connection of namedConnections) {
       this.namedClients.set(connection.name, this.createNamedFhirClient(connection));
@@ -273,7 +274,7 @@ export class FumeEngine<ConfigType extends IConfig = IConfig> {
       this.config.FHIR_SERVER_TIMEOUT
     );
     log.debug?.('Initialized URL-based FHIR client pool.', { initialized: this.urlClientPool !== undefined });
-    log.info(`Loaded ${this.namedClients.size} named FHIR connection(s).`);
+    log.info(`Loaded ${this.namedClients.size} named FHIR connection(s) from ${loadedConnections.sourceKind}: ${loadedConnections.sourceDescription}.`);
 
     await this.initializeGlobalFhirContext();
     log.info('Global FHIR context initialized');
