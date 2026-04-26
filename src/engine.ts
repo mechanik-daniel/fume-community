@@ -395,6 +395,14 @@ export class FumeEngine<ConfigType extends IConfig = IConfig> {
   }
 
   private createNamedFhirClient (connection: ConnectionConfig): FhirClient {
+    // Defense-in-depth: verify credentials are provided when authType is BASIC
+    if (connection.authType === 'BASIC' && (!connection.username || !connection.password)) {
+      throw new Error(
+        `Invalid FHIR connection "${connection.name}": authType is "BASIC" but credentials are missing. ` +
+        'Configure both username and password in connections.yml for this connection.'
+      );
+    }
+
     const auth = connection.authType === 'BASIC' && connection.username && connection.password
       ? { username: connection.username, password: connection.password }
       : undefined;
