@@ -4,6 +4,7 @@
  */
 
 import { describe, expect, test } from '@jest/globals';
+import { Buffer } from 'buffer';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -53,7 +54,7 @@ const makeConfig = (connectionsFilePath?: string): IConfig => {
 describe('ConnectionsLoader', () => {
   test('loads valid YAML including NONE and BASIC auth entries', () => {
     const tempDir = makeTempDir();
-    const filePath = writeConnectionsFile(tempDir, 'connections:\n  - name: publicServer\n    baseUrl: "https://r4.smarthealthit.org"\n    authType: NONE\n  - name: secureServer\n    baseUrl: "https://fhir.example.com/r4"\n    authType: BASIC\n    username: "alice"\n    password: "secret"\n    timeout: 12345\n');
+    const filePath = writeConnectionsFile(tempDir, 'fhir:\n  - name: publicServer\n    baseUrl: "https://r4.smarthealthit.org"\n    authType: NONE\n  - name: secureServer\n    baseUrl: "https://fhir.example.com/r4"\n    authType: BASIC\n    username: "alice"\n    password: "secret"\n    timeout: 12345\n');
 
     const loaded = ConnectionsLoader.load(makeConfig(filePath));
 
@@ -82,7 +83,7 @@ describe('ConnectionsLoader', () => {
       process.env.FHIR_CONN_PW = 'env-pass';
 
       const tempDir = makeTempDir();
-      const filePath = writeConnectionsFile(tempDir, 'connections:\n  - name: secureServer\n    baseUrl: "https://fhir.example.com/r4"\n    authType: BASIC\n    username: "${FHIR_CONN_UN}"\n    password: "${FHIR_CONN_PW}"\n');
+      const filePath = writeConnectionsFile(tempDir, 'fhir:\n  - name: secureServer\n    baseUrl: "https://fhir.example.com/r4"\n    authType: BASIC\n    username: "${FHIR_CONN_UN}"\n    password: "${FHIR_CONN_PW}"\n');
 
       const loaded = ConnectionsLoader.load(makeConfig(filePath));
 
@@ -116,7 +117,7 @@ describe('ConnectionsLoader', () => {
     delete process.env.MISSING_VAR;
 
     const tempDir = makeTempDir();
-    const filePath = writeConnectionsFile(tempDir, 'connections:\n  - name: secureServer\n    baseUrl: "https://fhir.example.com/r4"\n    username: "${MISSING_VAR}"\n');
+    const filePath = writeConnectionsFile(tempDir, 'fhir:\n  - name: secureServer\n    baseUrl: "https://fhir.example.com/r4"\n    username: "${MISSING_VAR}"\n');
 
     expect(() => ConnectionsLoader.load(makeConfig(filePath))).toThrow(
       `Missing environment variable "MISSING_VAR" referenced in ${filePath}`
@@ -125,9 +126,73 @@ describe('ConnectionsLoader', () => {
 
   test('throws zod validation error for invalid schema', () => {
     const tempDir = makeTempDir();
-    const filePath = writeConnectionsFile(tempDir, `connections:\n  - name: missingBaseUrl\n`);
+    const filePath = writeConnectionsFile(tempDir, `fhir:\n  - name: missingBaseUrl\n`);
 
     expect(() => ConnectionsLoader.load(makeConfig(filePath))).toThrow(ZodError);
+  });
+
+  test('returns empty array when explicit path-like connections file is missing', () => {
+    const loaded = ConnectionsLoader.load(makeConfig('./config/alternate-connections.yml'));
+
+    expect(loaded).toStrictEqual([]);
+  });
+
+  test('loads valid inline base64 YAML', () => {
+    const encoded = Buffer.from('fhir:\n  - name: inlineServer\n    baseUrl: "https://fhir.example.com/r4"\n    authType: NONE\n', 'utf8').toString('base64');
+
+    const loaded = ConnectionsLoader.load(makeConfig(encoded));
+
+    expect(loaded).toStrictEqual([
+      {
+        name: 'inlineServer',
+        baseUrl: 'https://fhir.example.com/r4',
+        authType: 'NONE',
+      },
+    ]);
+  });
+
+  test('loads inline base64 YAML with env placeholders', () => {
+    const previousUsername = process.env.FHIR_CONN_UN;
+    const previousPassword = process.env.FHIR_CONN_PW;
+
+    try {
+      process.env.FHIR_CONN_UN = 'env-user';
+      process.env.FHIR_CONN_PW = 'env-pass';
+
+      const encoded = Buffer.from('fhir:\n  - name: secureServer\n    baseUrl: "https://fhir.example.com/r4"\n    authType: BASIC\n    username: "${FHIR_CONN_UN}"\n    password: "${FHIR_CONN_PW}"\n', 'utf8').toString('base64');
+
+      const loaded = ConnectionsLoader.load(makeConfig(encoded));
+
+      expect(loaded[0].username).toBe('env-user');
+      expect(loaded[0].password).toBe('env-pass');
+    } finally {
+      if (previousUsername === undefined) {
+        delete process.env.FHIR_CONN_UN;
+      } else {
+        process.env.FHIR_CONN_UN = previousUsername;
+      }
+
+      if (previousPassword === undefined) {
+        delete process.env.FHIR_CONN_PW;
+      } else {
+        process.env.FHIR_CONN_PW = previousPassword;
+      }
+    }
+  });
+
+  test('throws migration error for legacy top-level connections node', () => {
+    const tempDir = makeTempDir();
+    const filePath = writeConnectionsFile(tempDir, 'connections:\n  - name: publicServer\n    baseUrl: "https://r4.smarthealthit.org"\n');
+
+    expect(() => ConnectionsLoader.load(makeConfig(filePath))).toThrow(
+      'Named FHIR connections now use a top-level "fhir" node instead of "connections".'
+    );
+  });
+
+  test('throws descriptive error for invalid explicit non-path-like source', () => {
+    expect(() => ConnectionsLoader.load(makeConfig('not-valid-base64'))).toThrow(
+      'FHIR_CONNECTIONS_FILE must be either an existing file path or a base64-encoded YAML document.'
+    );
   });
 });
 
