@@ -26,14 +26,14 @@ const ConnectionConfigSchema = z
 		if (connection.authType === 'BASIC') {
 			if (!connection.username) {
 				ctx.addIssue({
-					code: z.ZodIssueCode.custom,
+					code: 'custom',
 					path: ['username'],
 					message: 'username is required when authType is BASIC',
 				});
 			}
 			if (!connection.password) {
 				ctx.addIssue({
-					code: z.ZodIssueCode.custom,
+					code: 'custom',
 					path: ['password'],
 					message: 'password is required when authType is BASIC',
 				});
@@ -43,14 +43,14 @@ const ConnectionConfigSchema = z
 		if (connection.authType === 'NONE') {
 			if (connection.username) {
 				ctx.addIssue({
-					code: z.ZodIssueCode.custom,
+					code: 'custom',
 					path: ['username'],
 					message: 'username must not be provided when authType is NONE',
 				});
 			}
 			if (connection.password) {
 				ctx.addIssue({
-					code: z.ZodIssueCode.custom,
+					code: 'custom',
 					path: ['password'],
 					message: 'password must not be provided when authType is NONE',
 				});
