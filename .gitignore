@@ -10,3 +10,4 @@ node_modules
 tests/.fhir-packages
 /mappings/
 src/*.generated.ts
+connections.y*ml
