@@ -74,16 +74,33 @@ describe('ConnectionsLoader', () => {
   });
 
   test('resolves ${ENV_VAR} placeholders from process.env', () => {
-    process.env.FHIR_CONN_UN = 'env-user';
-    process.env.FHIR_CONN_PW = 'env-pass';
+    const previousUsername = process.env.FHIR_CONN_UN;
+    const previousPassword = process.env.FHIR_CONN_PW;
 
-    const tempDir = makeTempDir();
-    const filePath = writeConnectionsFile(tempDir, 'connections:\n  - name: secureServer\n    baseUrl: "https://fhir.example.com/r4"\n    authType: BASIC\n    username: "${FHIR_CONN_UN}"\n    password: "${FHIR_CONN_PW}"\n');
+    try {
+      process.env.FHIR_CONN_UN = 'env-user';
+      process.env.FHIR_CONN_PW = 'env-pass';
 
-    const loaded = ConnectionsLoader.load(makeConfig(filePath));
+      const tempDir = makeTempDir();
+      const filePath = writeConnectionsFile(tempDir, 'connections:\n  - name: secureServer\n    baseUrl: "https://fhir.example.com/r4"\n    authType: BASIC\n    username: "${FHIR_CONN_UN}"\n    password: "${FHIR_CONN_PW}"\n');
 
-    expect(loaded[0].username).toBe('env-user');
-    expect(loaded[0].password).toBe('env-pass');
+      const loaded = ConnectionsLoader.load(makeConfig(filePath));
+
+      expect(loaded[0].username).toBe('env-user');
+      expect(loaded[0].password).toBe('env-pass');
+    } finally {
+      if (previousUsername === undefined) {
+        delete process.env.FHIR_CONN_UN;
+      } else {
+        process.env.FHIR_CONN_UN = previousUsername;
+      }
+
+      if (previousPassword === undefined) {
+        delete process.env.FHIR_CONN_PW;
+      } else {
+        process.env.FHIR_CONN_PW = previousPassword;
+      }
+    }
   });
 
   test('returns empty array when connections file is missing', () => {
