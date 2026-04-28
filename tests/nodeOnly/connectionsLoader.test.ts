@@ -151,6 +151,22 @@ describe('ConnectionsLoader', () => {
     ]);
   });
 
+  test('loads valid inline base64 YAML without padding', () => {
+    const encoded = Buffer.from('fhir:\n  - name: inlineServer\n    baseUrl: "https://fhir.example.com/r4"\n    authType: NONE\n', 'utf8')
+      .toString('base64')
+      .replace(/=+$/u, '');
+
+    const loaded = ConnectionsLoader.load(makeConfig(encoded));
+
+    expect(loaded).toStrictEqual([
+      {
+        name: 'inlineServer',
+        baseUrl: 'https://fhir.example.com/r4',
+        authType: 'NONE',
+      },
+    ]);
+  });
+
   test('loads inline base64 YAML with env placeholders', () => {
     const previousUsername = process.env.FHIR_CONN_UN;
     const previousPassword = process.env.FHIR_CONN_PW;
@@ -192,6 +208,20 @@ describe('ConnectionsLoader', () => {
   test('throws descriptive error for invalid explicit non-path-like source', () => {
     expect(() => ConnectionsLoader.load(makeConfig('not-valid-base64'))).toThrow(
       'FHIR_CONNECTIONS_FILE must be either an existing file path or a base64-encoded YAML document.'
+    );
+  });
+
+  test('does not treat arbitrary slash-containing values as file paths', () => {
+    expect(() => ConnectionsLoader.load(makeConfig('not/a/pathish-token'))).toThrow(
+      'FHIR_CONNECTIONS_FILE must be either an existing file path or a base64-encoded YAML document.'
+    );
+  });
+
+  test('throws descriptive error for duplicate connection names', () => {
+    const encoded = Buffer.from('fhir:\n  - name: duplicate\n    baseUrl: "https://server-a.example.com/fhir"\n  - name: duplicate\n    baseUrl: "https://server-b.example.com/fhir"\n', 'utf8').toString('base64');
+
+    expect(() => ConnectionsLoader.load(makeConfig(encoded))).toThrow(
+      'Duplicate FHIR connection name(s): duplicate. Connection names must be unique.'
     );
   });
 });

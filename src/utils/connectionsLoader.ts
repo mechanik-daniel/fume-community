@@ -67,9 +67,24 @@ const ConnectionConfigSchema = z
 		}
 	});
 
-const ConnectionsFileSchema = z.object({
-	fhir: z.array(ConnectionConfigSchema),
-});
+const ConnectionsFileSchema = z
+	.object({
+		fhir: z.array(ConnectionConfigSchema),
+	})
+	.superRefine((document, ctx) => {
+		const duplicateNames = document.fhir
+			.map((connection) => connection.name)
+			.filter((name, index, names) => names.indexOf(name) !== index)
+			.filter((name, index, names) => names.indexOf(name) === index);
+
+		if (duplicateNames.length > 0) {
+			ctx.addIssue({
+				code: 'custom',
+				path: ['fhir'],
+				message: `Duplicate FHIR connection name(s): ${duplicateNames.join(', ')}. Connection names must be unique.`,
+			});
+		}
+	});
 
 const resolveConnectionsFilePath = (config: IConfig): string => {
 	const configuredPath = config.FHIR_CONNECTIONS_FILE?.trim();
@@ -80,23 +95,34 @@ const resolveConnectionsFilePath = (config: IConfig): string => {
 };
 
 const isPathLikeValue = (value: string): boolean => {
-	return path.isAbsolute(value)
-		|| value.startsWith('.')
-		|| value.startsWith('..')
-		|| value.includes('/')
-		|| value.includes('\\')
-		|| value.endsWith('.yml')
-		|| value.endsWith('.yaml');
+	const normalized = value.trim();
+
+	return path.isAbsolute(normalized)
+		|| normalized.startsWith('./')
+		|| normalized.startsWith('../')
+		|| normalized.startsWith('.\\')
+		|| normalized.startsWith('..\\')
+		|| normalized.startsWith('/')
+		|| normalized.startsWith('\\')
+		|| normalized.endsWith('.yml')
+		|| normalized.endsWith('.yaml');
 };
 
 const tryDecodeBase64 = (value: string): string | null => {
 	const normalized = value.trim();
-	if (normalized.length === 0 || normalized.length % 4 !== 0 || !base64Pattern.test(normalized)) {
+	if (normalized.length === 0 || !base64Pattern.test(normalized)) {
 		return null;
 	}
 
+	const remainder = normalized.length % 4;
+	if (remainder === 1) {
+		return null;
+	}
+
+	const padded = normalized + '='.repeat((4 - remainder) % 4);
+
 	try {
-		const decoded = Buffer.from(normalized, 'base64').toString('utf8');
+		const decoded = Buffer.from(padded, 'base64').toString('utf8');
 		const reEncoded = Buffer.from(decoded, 'utf8').toString('base64').replace(/=+$/u, '');
 		if (reEncoded !== normalized.replace(/=+$/u, '')) {
 			return null;
