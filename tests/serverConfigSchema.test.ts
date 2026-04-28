@@ -14,6 +14,7 @@ describe('FumeConfigSchema', () => {
       FHIR_PACKAGES: '',
       FHIR_SERVER_AUTH_TYPE: 'NONE',
       FHIR_SERVER_BASE: '',
+      FHIR_CONNECTIONS_URL_POOL_SIZE: 10,
       FHIR_SERVER_PW: '',
       FHIR_SERVER_TIMEOUT: 30000,
       FHIR_SERVER_UN: '',
