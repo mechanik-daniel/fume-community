@@ -1,14 +1,13 @@
-const js = require('@eslint/js');
-const globals = require('globals');
-
-const tseslint = require('@typescript-eslint/eslint-plugin');
-const tsParser = require('@typescript-eslint/parser');
-const simpleImportSort = require('eslint-plugin-simple-import-sort');
-const stylistic = require('@stylistic/eslint-plugin');
-const header = require('eslint-plugin-header');
+import js from '@eslint/js';
+import stylistic from '@stylistic/eslint-plugin';
+import tseslint from '@typescript-eslint/eslint-plugin';
+import tsParser from '@typescript-eslint/parser';
+import globals from 'globals';
+import header from 'eslint-plugin-header';
+import simpleImportSort from 'eslint-plugin-simple-import-sort';
 
 /** @type {import('eslint').Linter.Config[]} */
-module.exports = [
+export default [
   {
     ignores: [
       'dist/**',
