@@ -3,8 +3,8 @@
  *   Project name: FUME-COMMUNITY
  */
 export type { ICache } from './Cache';
-export type { ConnectionAuthType, ConnectionConfig, ConnectionsFile } from './ConnectionConfig';
 export type { IConfig } from './Config';
+export type { ConnectionAuthType, ConnectionConfig, ConnectionsFile } from './ConnectionConfig';
 export type { IAppBinding, IFumeEngine } from './FumeEngine';
 export type { FumeEngineCreateOptions } from './FumeEngineCreateOptions';
 export type { IFumeServer } from './FumeServer';
