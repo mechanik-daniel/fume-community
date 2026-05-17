@@ -40,6 +40,8 @@
     "test:stop-hapi": "cd tests && docker compose stop",
     "pretest": "npm run generate:openapi",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config=jest.integration.cjs --runInBand",
+    "test:clearcache": "rimraf tests/.fhir-packages",
+    "test:coldstart": "npm run test:clearcache && npm run test",
     "prepare": "npm run build",
     "prepublishOnly": "npm ci && npm run build"
   },
