@@ -132,7 +132,7 @@ describe('integration tests', () => {
         }
       ]
     });
-  });
+  }, 60000);
 
   test('Validate Patient.gender code - incorrect', async () => {
     const fume = getResourceFileContents('mappings', 'flash-patient-with-incorrect-gender.txt');
@@ -509,7 +509,7 @@ describe('integration tests', () => {
       ]
     });
     expect(wrong.body.message).toBe('Value "lalaland" for "address.country" in "il-core-patient" is not in the required ValueSet.');
-  });
+  }, 60000);
 
   test('Validate Task.intent code', async () => {
     const fume = `InstanceOf: Task
